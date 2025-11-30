@@ -31,7 +31,7 @@ public protocol ICloudEntity: Hashable  {
 /// - Note: This utility currently works with the public CloudKit database (`CKContainer.default().publicCloudDatabase`)
 ///
 /// - Author: Eliseev Dmitry
-/// - Since: 1.0.6
+/// - Since: 1.0.7
 
 public final class CloudKitUtilityPackage: @unchecked Sendable {
     /// The CloudKit container used for all operations.
@@ -46,26 +46,20 @@ public final class CloudKitUtilityPackage: @unchecked Sendable {
     /// This design ensures flexibility in choosing the appropriate database for operations
     /// and enables dependency injection for better testability.
     private let container: CKContainer
+    private let database: CKDatabase
     private let notificationCenter = UNUserNotificationCenter.current()
     private let cloudQueue = DispatchQueue(label: "CloudKitUtilityPackage.Queue", qos: .userInitiated)
     
-    nonisolated(unsafe) private static var _shared: CloudKitUtilityPackage?
-    
-    public static func configure(container: CKContainer = .default()) {
-        _shared = CloudKitUtilityPackage(container: container)
-    }
-    
-    public static var shared: CloudKitUtilityPackage {
-        guard let instance = _shared else {
-            fatalError("CloudKitUtilityPackage is not configured. Call configure() first.")
-        }
-        return instance
-    }
-    
+    nonisolated(unsafe) public static var shared = CloudKitUtilityPackage(scope: .public)
+
     /// Private initializer for singleton with default container
-    private init(container: CKContainer) {
-        self.container = container
-    }
+    private init(
+            container: CKContainer = CKContainer.default(),
+            scope: CKDatabase.Scope
+        ) {
+            self.container = container
+            self.database = container.database(with: scope)
+        }
     
     /// CloudKit-related errors used within the utility.
     enum CloudKitError: LocalizedError {
@@ -366,7 +360,7 @@ extension CloudKitUtilityPackage {
     /// - Parameter recordID: The unique identifier of the CloudKit record to fetch.
     /// - Returns: An optional instance of the requested entity type, or `nil` if the record cannot be initialized.
     public func readItem<T: ICloudEntity>(recordID: CKRecord.ID) async throws -> T? {
-        let record = try await container.publicCloudDatabase.record(for: recordID)
+        let record = try await database.record(for: recordID)
         return T(record: record)
     }
     
@@ -420,7 +414,7 @@ extension CloudKitUtilityPackage {
     /// - Returns: The record ID of the deleted record.
     /// - Throws: Throws errors encountered during the deletion.
     public func delete<T: ICloudEntity>(item: T) async throws -> CKRecord.ID? {
-        try await container.publicCloudDatabase.deleteRecord(withID: item.record.recordID)
+        try await database.deleteRecord(withID: item.record.recordID)
     }
 }
 
@@ -477,7 +471,7 @@ extension CloudKitUtilityPackage {
     ///
     /// - Parameter operation: The CloudKit database operation to be executed.
     private func add(operation: CKDatabaseOperation) {
-        container.publicCloudDatabase.add(operation)
+        database.add(operation)
     }
     
     /// Awaits the completion of a CKQueryOperation and returns a success boolean or throws an error.
@@ -561,7 +555,7 @@ extension CloudKitUtilityPackage {
     /// - Returns: The saved CKRecord as returned by CloudKit.
     /// - Throws: An error if saving the record fails.
     private func saveItem(record: CKRecord) async throws -> CKRecord {
-        try await container.publicCloudDatabase.save(record)
+        try await database.save(record)
     }
     
     private func handleRecordMatched<T: ICloudEntity>(
@@ -737,7 +731,7 @@ extension CloudKitUtilityPackage {
     /// - Returns: The saved `CKSubscription`.
     /// - Throws: Throws an error if saving the subscription fails.
     public func subscribeToNotifications(subscription: CKQuerySubscription) async throws -> CKSubscription {
-        return try await container.publicCloudDatabase.save(subscription)
+        return try await database.save(subscription)
     }
     
     /// Deletes a CloudKit subscription asynchronously to disable notifications.
@@ -746,7 +740,7 @@ extension CloudKitUtilityPackage {
     /// - Returns: The ID of the deleted subscription.
     /// - Throws: Throws an error if deleting the subscription fails.
     public func unSubscribeToNotifications(subscriptionID: CKSubscription.ID) async throws -> CKSubscription.ID {
-        try await container.publicCloudDatabase.deleteSubscription(withID: subscriptionID)
+        try await database.deleteSubscription(withID: subscriptionID)
     }
     
     /// Fetches all CloudKit subscriptions asynchronously.
@@ -773,7 +767,7 @@ extension CloudKitUtilityPackage {
     ///
     /// - Parameter completion: A closure called upon completion with a result containing an array of `CKSubscription` or an error.
     private func fetchAllSubscriptions(completion: @escaping @Sendable (Result<[CKSubscription], Error>) -> Void) {
-        container.publicCloudDatabase.fetchAllSubscriptions { subscriptions, error in
+        database.fetchAllSubscriptions { subscriptions, error in
             if let subscriptions = subscriptions {
                 completion(.success(subscriptions))
             } else if let error = error {
