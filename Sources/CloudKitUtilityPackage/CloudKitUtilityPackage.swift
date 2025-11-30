@@ -10,6 +10,8 @@ import Combine
 import CloudKit
 import UserNotifications
 
+
+
 /// CloudKitUtilityPackage — a utility class providing generic methods for entities conforming to the ICloudEntity protocol.
 public protocol ICloudEntity: Hashable  {
     init?(record: CKRecord)
@@ -29,10 +31,9 @@ public protocol ICloudEntity: Hashable  {
 /// - Note: This utility currently works with the public CloudKit database (`CKContainer.default().publicCloudDatabase`)
 ///
 /// - Author: Eliseev Dmitry
-/// - Since: 1.0.0
+/// - Since: 1.0.5
 
-@MainActor
-public final class CloudKitUtilityPackage {
+public final class CloudKitUtilityPackage: @unchecked Sendable {
     /// The CloudKit container used for all operations.
     /// By default, it is initialized with `CKContainer.default()`, but a custom container
     /// can be provided via the initializer, allowing for testing or using different iCloud containers.
@@ -46,6 +47,8 @@ public final class CloudKitUtilityPackage {
     /// and enables dependency injection for better testability.
     private let container: CKContainer
     private let notificationCenter = UNUserNotificationCenter.current()
+    private let cloudQueue = DispatchQueue(label: "CloudKitUtilityPackage.Queue", qos: .userInitiated)
+    
     public static let shared = CloudKitUtilityPackage()
     
     /// Private initializer for singleton with default container
@@ -92,14 +95,19 @@ extension CloudKitUtilityPackage {
     /// Internally calls `getAvailableiCloudAccount()`, which may throw `CloudKitError`,
     /// and publishes a `Bool` indicating whether the iCloud account is available on the device.
     
+    
     public func getAvailableiCloudAccountPublisher() -> AnyPublisher<Bool, Error> {
-        Future { promise in
-            Task {
-                do {
-                    let isAvailable = try await self.getAvailableiCloudAccount()
-                    promise(.success(isAvailable))
-                } catch {
-                    promise(.failure(error))
+        
+        Future {promise in
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let isAvailable = try await self.getAvailableiCloudAccount()
+                        promise(.success(isAvailable))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -111,12 +119,15 @@ extension CloudKitUtilityPackage {
     /// privacy policies often restrict access to user name and other identity information.
     public func getUserIDPublisher() -> AnyPublisher<String, Error> {
         Future { promise in
-            Task {
-                do {
-                    let recordID = try await self.getUserRecordID()
-                    promise(.success(recordID.recordName))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let recordID = try await self.getUserRecordID()
+                        promise(.success(recordID.recordName))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -195,14 +206,17 @@ extension CloudKitUtilityPackage {
     /// - Parameter item: An instance conforming to `ICloudEntity` to be saved.
     /// - Returns: A publisher that outputs the saved `CKRecord?` on success,
     ///   or fails with an error if the save operation fails.
-    public func createItemPublisher<T: ICloudEntity>(item: T) -> AnyPublisher<CKRecord?, Error> {
+    public func createItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord?, Error> {
         Future { promise in
-            Task {
-                do {
-                    let record = try await self.createItem(item: item)
-                    promise(.success(record))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let record = try await self.createItem(item: item)
+                        promise(.success(record))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -220,14 +234,17 @@ extension CloudKitUtilityPackage {
     /// - Parameter recordID: The unique identifier of the CloudKit record to fetch.
     /// - Returns: A publisher that outputs an optional instance of the requested entity type,
     ///   or fails with an error if the record cannot be retrieved or initialized.
-    public func readItem<T: ICloudEntity>(recordID: CKRecord.ID) -> AnyPublisher<T?, Error> {
+    public func readItem<T: ICloudEntity & Sendable>(recordID: CKRecord.ID) -> AnyPublisher<T?, Error> {
         Future { promise in
-            Task {
-                do {
-                    let item: T? = try await self.readItem(recordID: recordID)
-                    promise(.success(item))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let item: T? = try await self.readItem(recordID: recordID)
+                        promise(.success(item))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -249,22 +266,25 @@ extension CloudKitUtilityPackage {
     /// - Returns: A publisher emitting an array of objects of type `T` matching the query, or failing with an error.
     public func readItemsPublisher<T: ICloudEntity & Sendable>(
         recordType: CKRecord.RecordType,
-        predicateBuilder: @escaping () -> NSPredicate,
+        predicateBuilder: @escaping @Sendable () -> NSPredicate,
         sortDescriptors: [SortDescriptorWrapper]? = nil,
         resultsLimit: Int? = nil
     ) -> AnyPublisher<[T], Error> {
         Future { [self] promise in
-            Task {
-                do {
-                    let items: [T] = try await readItems(
-                        recordType: recordType,
-                        predicateBuilder: predicateBuilder,
-                        sortDescriptors: sortDescriptors,
-                        resultsLimit: resultsLimit
-                    )
-                    promise(.success(items))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let items: [T] = try await self.readItems(
+                            recordType: recordType,
+                            predicateBuilder: predicateBuilder,
+                            sortDescriptors: sortDescriptors,
+                            resultsLimit: resultsLimit
+                        )
+                        promise(.success(items))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -280,7 +300,7 @@ extension CloudKitUtilityPackage {
     /// - Parameter item: The object conforming to `ICloudEntity` to update.
     /// - Returns: A publisher that outputs the updated `CKRecord?` on success,
     ///   or fails with an error if the update operation fails.
-    public func updateItemPublisher<T: ICloudEntity>(item: T) -> AnyPublisher<CKRecord?, Error> {
+    public func updateItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord?, Error> {
         createItemPublisher(item: item)
     }
     
@@ -290,14 +310,17 @@ extension CloudKitUtilityPackage {
     ///
     /// - Parameter item: The object to delete.
     /// - Returns: A publisher that emits the `CKRecord.ID` of the deleted record or an error.
-    public func deletePublisher<T: ICloudEntity>(item: T) -> AnyPublisher<CKRecord.ID?, Error> {
+    public func deletePublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord.ID?, Error> {
         Future { promise in
-            Task {
-                do {
-                    let recordID = try await self.delete(item: item)
-                    promise(.success(recordID))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let recordID = try await self.delete(item: item)
+                        promise(.success(recordID))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -608,12 +631,15 @@ extension CloudKitUtilityPackage {
     /// - Returns: A publisher emitting a Boolean indicating whether authorization was granted or an error if the request fails.
     public func requestNotificationPermissions(options: UNAuthorizationOptions) -> AnyPublisher<Bool, Error> {
         Future { promise in
-            Task {
-                do {
-                    let result = try await self.requestNotificationPermissions(options: options)
-                    promise(.success(result))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let result = try await self.requestNotificationPermissions(options: options)
+                        promise(.success(result))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -626,12 +652,15 @@ extension CloudKitUtilityPackage {
     /// - Returns: A publisher emitting the saved `CKSubscription` or an error if the operation fails.
     public func subscribeToNotifications(subscription: CKQuerySubscription) -> AnyPublisher<CKSubscription, Error> {
         Future { promise in
-            Task {
-                do {
-                    let result = try await self.subscribeToNotifications(subscription: subscription)
-                    promise(.success(result))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let result = try await self.subscribeToNotifications(subscription: subscription)
+                        promise(.success(result))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -644,12 +673,15 @@ extension CloudKitUtilityPackage {
     /// - Returns: A publisher emitting the deleted subscription ID or an error if the operation fails.
     public func unSubscribeToNotifications(subscriptionID: CKSubscription.ID) -> AnyPublisher<CKSubscription.ID, Error> {
         Future { promise in
-            Task {
-                do {
-                    let result = try await self.unSubscribeToNotifications(subscriptionID: subscriptionID)
-                    promise(.success(result))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let result = try await self.unSubscribeToNotifications(subscriptionID: subscriptionID)
+                        promise(.success(result))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
@@ -661,12 +693,15 @@ extension CloudKitUtilityPackage {
     /// - Returns: A publisher emitting an array of `CKSubscription` or an error if the fetch fails.
     public func fetchAllSubscriptions() -> AnyPublisher<[CKSubscription], Error> {
         Future { promise in
-            Task {
-                do {
-                    let result = try await self.fetchAllSubscriptions()
-                    promise(.success(result))
-                } catch {
-                    promise(.failure(error))
+            nonisolated(unsafe) let promise = promise
+            self.cloudQueue.async {
+                Task {
+                    do {
+                        let result = try await self.fetchAllSubscriptions()
+                        promise(.success(result))
+                    } catch {
+                        promise(.failure(error))
+                    }
                 }
             }
         }
