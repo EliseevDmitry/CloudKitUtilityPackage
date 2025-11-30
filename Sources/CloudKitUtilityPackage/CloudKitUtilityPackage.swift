@@ -400,7 +400,7 @@ extension CloudKitUtilityPackage {
     /// - Parameters:
     ///   - key: The record field key to sort by.
     ///   - ascending: Whether the sort order is ascending (`true`) or descending (`false`).
-    struct SortDescriptorWrapper: Sendable {
+    public struct SortDescriptorWrapper: Sendable {
         let key: String
         let ascending: Bool
     }
