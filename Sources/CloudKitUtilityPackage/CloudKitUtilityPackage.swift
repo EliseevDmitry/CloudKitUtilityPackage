@@ -31,7 +31,7 @@ public protocol ICloudEntity: Hashable  {
 /// - Note: This utility currently works with the public CloudKit database (`CKContainer.default().publicCloudDatabase`)
 ///
 /// - Author: Eliseev Dmitry
-/// - Since: 1.0.5
+/// - Since: 1.0.6
 
 public final class CloudKitUtilityPackage: @unchecked Sendable {
     /// The CloudKit container used for all operations.
@@ -49,10 +49,21 @@ public final class CloudKitUtilityPackage: @unchecked Sendable {
     private let notificationCenter = UNUserNotificationCenter.current()
     private let cloudQueue = DispatchQueue(label: "CloudKitUtilityPackage.Queue", qos: .userInitiated)
     
-    public static let shared = CloudKitUtilityPackage()
+    nonisolated(unsafe) private static var _shared: CloudKitUtilityPackage?
+    
+    public static func configure(container: CKContainer = .default()) {
+        _shared = CloudKitUtilityPackage(container: container)
+    }
+    
+    public static var shared: CloudKitUtilityPackage {
+        guard let instance = _shared else {
+            fatalError("CloudKitUtilityPackage is not configured. Call configure() first.")
+        }
+        return instance
+    }
     
     /// Private initializer for singleton with default container
-    private init(container: CKContainer = .default()) {
+    private init(container: CKContainer) {
         self.container = container
     }
     
