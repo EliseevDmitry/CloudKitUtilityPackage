@@ -32,7 +32,7 @@ public protocol ICloudEntity: Hashable  {
 /// - Since: 1.0.0
 
 @MainActor
-final class CloudKitUtilityPackage {
+public final class CloudKitUtilityPackage {
     /// The CloudKit container used for all operations.
     /// By default, it is initialized with `CKContainer.default()`, but a custom container
     /// can be provided via the initializer, allowing for testing or using different iCloud containers.
@@ -46,7 +46,7 @@ final class CloudKitUtilityPackage {
     /// and enables dependency injection for better testability.
     private let container: CKContainer
     private let notificationCenter = UNUserNotificationCenter.current()
-    static let shared = CloudKitUtilityPackage()
+    public static let shared = CloudKitUtilityPackage()
     
     /// Private initializer for singleton with default container
     private init(container: CKContainer = .default()) {
