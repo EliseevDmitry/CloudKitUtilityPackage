@@ -31,7 +31,7 @@ public protocol ICloudEntity: Hashable  {
 /// - Note: This utility currently works with the public CloudKit database (`CKContainer.default().publicCloudDatabase`)
 ///
 /// - Author: Eliseev Dmitry
-/// - Since: 1.0.9
+/// - Since: 1.0.10
 
 public final class CloudKitUtilityPackage: @unchecked Sendable {
     /// The CloudKit container used for all operations.
@@ -206,7 +206,7 @@ extension CloudKitUtilityPackage {
     /// - Parameter item: An instance conforming to `ICloudEntity` to be saved.
     /// - Returns: A publisher that outputs the saved `CKRecord?` on success,
     ///   or fails with an error if the save operation fails.
-    public func createItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord?, Error> {
+    public func createItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord, Error> {
         Future { promise in
             nonisolated(unsafe) let promise = promise
             self.cloudQueue.async {
@@ -300,7 +300,7 @@ extension CloudKitUtilityPackage {
     /// - Parameter item: The object conforming to `ICloudEntity` to update.
     /// - Returns: A publisher that outputs the updated `CKRecord?` on success,
     ///   or fails with an error if the update operation fails.
-    public func updateItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord?, Error> {
+    public func updateItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord, Error> {
         createItemPublisher(item: item)
     }
     
@@ -310,7 +310,7 @@ extension CloudKitUtilityPackage {
     ///
     /// - Parameter item: The object to delete.
     /// - Returns: A publisher that emits the `CKRecord.ID` of the deleted record or an error.
-    public func deletePublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord.ID?, Error> {
+    public func deletePublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord.ID, Error> {
         Future { promise in
             nonisolated(unsafe) let promise = promise
             self.cloudQueue.async {
@@ -339,7 +339,7 @@ extension CloudKitUtilityPackage {
     /// - Note: The method is marked `@discardableResult` so that the returned `CKRecord?`
     ///   does not trigger a compiler warning if it is not used.
     @discardableResult
-    public func createItem<T: ICloudEntity>(item: T) async throws -> CKRecord? {
+    public func createItem<T: ICloudEntity>(item: T) async throws -> CKRecord {
         let record = item.record
         return try await saveItem(record: record)
     }
@@ -399,7 +399,7 @@ extension CloudKitUtilityPackage {
     /// - Note: The method is marked `@discardableResult` so that the returned `CKRecord?`
     ///   does not trigger a compiler warning if it is not used.
     @discardableResult
-    public func updateItem<T: ICloudEntity>(item: T) async throws -> CKRecord? {
+    public func updateItem<T: ICloudEntity>(item: T) async throws -> CKRecord {
         try await createItem(item: item)
     }
     
@@ -408,7 +408,7 @@ extension CloudKitUtilityPackage {
     /// - Parameter item: The object to delete.
     /// - Returns: The record ID of the deleted record.
     /// - Throws: Throws errors encountered during the deletion.
-    public func delete<T: ICloudEntity>(item: T) async throws -> CKRecord.ID? {
+    public func delete<T: ICloudEntity>(item: T) async throws -> CKRecord.ID {
         try await container.publicCloudDatabase.deleteRecord(withID: item.record.recordID)
     }
 }
