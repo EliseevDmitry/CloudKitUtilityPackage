@@ -31,9 +31,24 @@ public protocol ICloudEntity: Hashable  {
 /// - Note: This utility currently works with the public CloudKit database (`CKContainer.default().publicCloudDatabase`)
 ///
 /// - Author: Eliseev Dmitry
-/// - Since: 1.0.7
+/// - Since: 1.0.8
 
 public final class CloudKitUtilityPackage: @unchecked Sendable {
+    
+    public enum CloudEnvironment {
+        case `public`
+        case `private`
+        case shared
+        
+        var scope: CKDatabase.Scope {
+            switch self {
+            case .public: return .public
+            case .private: return .private
+            case .shared: return .shared
+            }
+        }
+    }
+    
     /// The CloudKit container used for all operations.
     /// By default, it is initialized with `CKContainer.default()`, but a custom container
     /// can be provided via the initializer, allowing for testing or using different iCloud containers.
@@ -46,20 +61,31 @@ public final class CloudKitUtilityPackage: @unchecked Sendable {
     /// This design ensures flexibility in choosing the appropriate database for operations
     /// and enables dependency injection for better testability.
     private let container: CKContainer
-    private let database: CKDatabase
+    private var database: CKDatabase
     private let notificationCenter = UNUserNotificationCenter.current()
     private let cloudQueue = DispatchQueue(label: "CloudKitUtilityPackage.Queue", qos: .userInitiated)
+    nonisolated(unsafe) private static var configuration: CloudEnvironment = .public
+    nonisolated(unsafe) private static var _shared: CloudKitUtilityPackage?
     
-    nonisolated(unsafe) public static var shared = CloudKitUtilityPackage(scope: .public)
+    public static func configure(_ environment: CloudEnvironment) {
+        configuration = environment
+    }
 
+    public static var shared: CloudKitUtilityPackage {
+        if let value = _shared { return value }
+        let instance = CloudKitUtilityPackage(scope: configuration.scope)
+        _shared = instance
+        return instance
+    }
+    
     /// Private initializer for singleton with default container
     private init(
-            container: CKContainer = CKContainer.default(),
-            scope: CKDatabase.Scope
-        ) {
-            self.container = container
-            self.database = container.database(with: scope)
-        }
+        container: CKContainer = CKContainer.default(),
+        scope: CKDatabase.Scope
+    ) {
+        self.container = container
+        self.database = container.database(with: scope)
+    }
     
     /// CloudKit-related errors used within the utility.
     enum CloudKitError: LocalizedError {
@@ -91,6 +117,7 @@ public final class CloudKitUtilityPackage: @unchecked Sendable {
         }
     }
 }
+
 
 //MARK: - User Functions
 
