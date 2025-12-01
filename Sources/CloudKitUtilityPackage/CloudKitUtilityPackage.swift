@@ -31,7 +31,7 @@ public protocol ICloudEntity: Hashable  {
 /// - Note: This utility currently works with the public CloudKit database (`CKContainer.default().publicCloudDatabase`)
 ///
 /// - Author: Eliseev Dmitry
-/// - Since: 1.0.10
+/// - Since: 1.0.11
 
 public final class CloudKitUtilityPackage: @unchecked Sendable {
     /// The CloudKit container used for all operations.
@@ -240,7 +240,7 @@ extension CloudKitUtilityPackage {
             self.cloudQueue.async {
                 Task {
                     do {
-                        let item: T? = try await self.readItem(recordID: recordID)
+                        let item: T? = try await self.readItemAsync(recordID: recordID)
                         promise(.success(item))
                     } catch {
                         promise(.failure(error))
@@ -354,7 +354,7 @@ extension CloudKitUtilityPackage {
     ///
     /// - Parameter recordID: The unique identifier of the CloudKit record to fetch.
     /// - Returns: An optional instance of the requested entity type, or `nil` if the record cannot be initialized.
-    public func readItem<T: ICloudEntity>(recordID: CKRecord.ID) async throws -> T? {
+    public func readItemAsync<T: ICloudEntity>(recordID: CKRecord.ID) async throws -> T? {
         let record = try await container.publicCloudDatabase.record(for: recordID)
         return T(record: record)
     }
