@@ -2,7 +2,14 @@
 
 **CloudKitUtilityPackage** — is a Swift library providing generic, async/await and Combine-based helpers for CloudKit. It simplifies CRUD operations, account checks, and notifications for entities conforming to ICloudEntity, offering a flexible and testable interface for the public CloudKit database.
 
-The library is oriented toward the **publicCloudDatabase**, as it is intended for storing data that is accessible to all users of the application, without the need for a private database for a specific user..
+The library is oriented toward the **publicCloudDatabase**, as it is intended for storing data that is accessible to all users of the application, without the need for a private database for a specific user.
+
+![Swift iOS v15](https://img.shields.io/badge/Swift-iOS%20v15-0366d6?style=flat&logo=swift&logoColor=white)
+![SPM](https://img.shields.io/badge/-SPM%20-0366d6?style=flat&logo=swift&logoColor=white&labelColor=555555)
+![CloudKit](https://img.shields.io/badge/-CloudKit-0366d6?style=flat&logo=apple&logoColor=white&labelColor=555555)
+![Combine](https://img.shields.io/badge/-Combine-0366d6?style=flat&logo=apple&logoColor=white&labelColor=555555)
+![async/await](https://img.shields.io/badge/-async%2Fawait-0366d6?style=flat&logo=swift&logoColor=white&labelColor=555555)
+![Unit Testing](https://img.shields.io/badge/-Unit%20Testing-0366d6?style=flat&logo=xcode&logoColor=white&labelColor=555555)
 
 ---
 
@@ -161,42 +168,111 @@ Deletes the specified CloudKit record and returns the record ID of the deleted r
 
 ---
 
-## Пример использования
+## Example Usage
+
+### Async/Await:
 
 ```swift
-// Async/Await
 do {
-    let isAvailable = try await iCloudService.getAvailableiCloudAccount()
-    print("iCloud доступен: \(isAvailable)")
+    // Check iCloud availability
+    let isAvailable = try await CloudKitUtilityPackage.shared.getAvailableiCloudAccount()
+    print("iCloud is available: \(isAvailable)")
 
-    let userInfo = try await iCloudService.getUserInformation()
+    // Fetch user information
+    let userInfo = try await CloudKitUtilityPackage.shared.getUserInformation()
     print("User ID: \(userInfo.id), Name: \(userInfo.name ?? "Unknown")")
     
-    // Создание сущности
-    let newItem = MyCloudEntity(...) // должен соответствовать ICloudEntity
-    let createdRecord = try await iCloudService.createItem(item: newItem)
+    // Create a new entity
+    let newItem = MyCloudEntity(...) // Must conform to ICloudEntity
+    let createdRecord = try await CloudKitUtilityPackage.shared.createItem(item: newItem)
     
-    // Получение объектов с фильтром
-    let items: [MyCloudEntity] = try await iCloudService.readItems(
+    // Fetch items with a filter
+    let items: [MyCloudEntity] = try await CloudKitUtilityPackage.shared.readItems(
         recordType: "MyRecordType",
         predicateBuilder: { NSPredicate(format: "field == %@", argumentArray: ["value"]) },
-        sortDescriptors: [SortDescriptorWrapper(key: "date", ascending: false)]
+        sortDescriptors: [CloudKitUtilityPackage.SortDescriptorWrapper(key: "date", ascending: false)]
     )
 } catch {
-    print("Ошибка CloudKit: \(error)")
+    print("CloudKit error: \(error)")
 }
+```
+### Combine-based:
+
+```swift
+import Combine
+
+var cancellables = Set<AnyCancellable>()
+
+// Check iCloud availability
+CloudKitUtilityPackage.shared.getAvailableiCloudAccountPublisher()
+    .sink { completion in
+        if case let .failure(error) = completion {
+            print("CloudKit error: \(error)")
+        }
+    } receiveValue: { isAvailable in
+        print("iCloud is available: \(isAvailable)")
+    }
+    .store(in: &cancellables)
+
+// Fetch user ID
+CloudKitUtilityPackage.shared.getUserIDPublisher()
+    .sink { completion in
+        if case let .failure(error) = completion {
+            print("CloudKit error: \(error)")
+        }
+    } receiveValue: { userID in
+        print("User ID: \(userID)")
+    }
+    .store(in: &cancellables)
+
+// Create a new entity
+let newItem = MyCloudEntity(...)
+CloudKitUtilityPackage.shared.createItemPublisher(item: newItem)
+    .sink { completion in
+        if case let .failure(error) = completion {
+            print("CloudKit error: \(error)")
+        }
+    } receiveValue: { record in
+        print("Created record: \(record)")
+    }
+    .store(in: &cancellables)
+
+// Fetch items with a filter
+CloudKitUtilityPackage.shared.readItemsPublisher(
+    recordType: "MyRecordType",
+    predicateBuilder: { NSPredicate(format: "field == %@", argumentArray: ["value"]) },
+    sortDescriptors: [CloudKitUtilityPackage.SortDescriptorWrapper(key: "date", ascending: false)]
+)
+.sink { completion in
+    if case let .failure(error) = completion {
+        print("CloudKit error: \(error)")
+    }
+} receiveValue: { items in
+    print("Fetched items: \(items)")
+}
+.store(in: &cancellables)
 ```
 
 ---
 
-## Требования
+## Requirements
 
-- iOS 15+
-- Swift 5.6+
-- CloudKit
+The library is compatible with the following environments:
+
+- **iOS**: 15.0 and above
+- **Swift**: 5.6 and above
+- **CloudKit**: Public database access
+
+> **Note:** This package is designed for `publicCloudDatabase` usage. For private or shared databases, adjustments may be required.
 
 ---
 
-## Лицензия
+## License
 
-MIT License
+**CloudKitUtilityPackage** is released under the **MIT License**.  
+
+This allows you to freely use, modify, and distribute the code in your personal or commercial projects, provided that the original copyright notice and license are included.
+
+- **Permission**: Granted to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software.  
+- **Conditions**: Include the original license notice in all copies or substantial portions of the Software.  
+- **Disclaimer**: The software is provided "as is", without warranty of any kind, express or implied.
