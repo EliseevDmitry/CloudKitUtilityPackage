@@ -1,102 +1,163 @@
 # CloudKitUtilityPackage
 
-**CloudKitUtilityPackage** — это Swift-библиотека, предоставляющая удобные асинхронные (`async/await`) и Combine-ориентированные функции для работы с CloudKit. Она упрощает CRUD-операции, проверку статуса iCloud-аккаунта и работу с уведомлениями для сущностей, которые соответствуют протоколу `ICloudEntity`.
+**CloudKitUtilityPackage** — is a Swift library providing generic, async/await and Combine-based helpers for CloudKit. It simplifies CRUD operations, account checks, and notifications for entities conforming to ICloudEntity, offering a flexible and testable interface for the public CloudKit database.
 
-Библиотека ориентирована на **publicCloudDatabase**, так как она предназначена для хранения данных, доступных всем пользователям приложения, без необходимости в приватной базе конкретного пользователя.
+The library is oriented toward the **publicCloudDatabase**, as it is intended for storing data that is accessible to all users of the application, without the need for a private database for a specific user..
 
 ---
 
-## Доступ к библиотеке
+## Getting Started
 
 ```swift
-private var iCloudService = CloudKitUtilityPackage.shared
+import CloudKitUtilityPackage
+...
+var iCloudService = CloudKitUtilityPackage.shared
 ```
 
-`CloudKitUtilityPackage.shared` — это **singleton**, предоставляющий общий доступ к функционалу библиотеки.
+`CloudKitUtilityPackage.shared` is a singleton that provides a unified access point to the library’s functionality.
 
 ---
 
-## Основные сущности
+## Data Model Requirements
 
 ### `ICloudEntity`
 
 ```swift
-public protocol ICloudEntity: Hashable  {
+protocol ICloudEntity: Hashable  {
     init?(record: CKRecord)
     var record: CKRecord { get }
 }
 ```
 
-**Краткое описание:**
-Протокол для моделей данных, которые могут быть сохранены в CloudKit. Обеспечивает инициализацию из `CKRecord` и возможность получения `CKRecord` для сохранения.
+**Overview:**
+A protocol for data models that can be stored in CloudKit. It provides initialization from a `CKRecord` and the ability to generate a `CKRecord` for saving.
 
 ### `SortDescriptorWrapper`
 
 ```swift
-public struct SortDescriptorWrapper: Sendable {
+struct SortDescriptorWrapper: Sendable {
     let key: String
     let ascending: Bool
 }
 ```
 
-**Краткое описание:**
-Потокобезопасная оболочка для `NSSortDescriptor`, позволяющая безопасно передавать информацию о сортировке между контекстами Swift concurrency.
+**Overview:**
+A thread-safe wrapper for `NSSortDescriptor` that allows sorting information to be safely passed between Swift concurrency contexts.
 
 ---
 
-## Основные функции
+## Core Functions
 
-### Проверка пользователя и информации о iCloud
+### Проверка пользователя и информации о iCloud:
 
-#### Combine-based
+#### Combine-based:
+---
 
 ```swift
 func getAvailableiCloudAccountPublisher() -> AnyPublisher<Bool, Error>
+```
+**Overview:**
+Checks if an iCloud account is available on the device.
+```swift
 func getUserIDPublisher() -> AnyPublisher<String, Error>
 ```
+**Overview:**
+Retrieves the current user's iCloud record ID.
 
-#### Async/Await
+#### Async/Await:
+---
 
 ```swift
 func getAvailableiCloudAccount() async throws -> Bool
+```
+**Overview:**
+Checks if an iCloud account is available on the device.
+
+```swift
 func getUserInformation() async throws -> (id: String, name: String?)
 ```
-
-> `name` может быть `nil` в соответствии с политикой конфиденциальности Apple.
+**Overview:**
+Retrieves the current iCloud user's record ID and, if available, their display name (may be `nil` due to Apple’s privacy restrictions).
 
 ---
 
-### CRUD функции
+### CRUD Functions:
 
-#### Combine-based
+#### Combine-based:
+---
 
 ```swift
-func createItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord?, Error>
+func createItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord, Error>
+```
+**Overview:**
+Creates a new CloudKit record from the given `ICloudEntity` and returns a publisher that emits the saved record or an error.
+
+```swift
 func readItem<T: ICloudEntity & Sendable>(recordID: CKRecord.ID) -> AnyPublisher<T?, Error>
+```
+**Overview:**
+Fetches a CloudKit record by its CKRecord.ID and returns a publisher that emits the corresponding `ICloudEntity` (nil if initialization fails) or an error
+
+```swift
 func readItemsPublisher<T: ICloudEntity & Sendable>(
     recordType: CKRecord.RecordType,
     predicateBuilder: @escaping @Sendable () -> NSPredicate,
     sortDescriptors: [SortDescriptorWrapper]? = nil,
     resultsLimit: Int? = nil
-) -> AnyPublisher<[T], Error> // Получение массива объектов из CloudKit с фильтром и сортировкой
-func updateItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord?, Error>
-func deletePublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord.ID?, Error>
+) -> AnyPublisher<[T], Error>
 ```
-
-#### Async/Await
+**Overview:**
+Fetches multiple CloudKit records matching the specified predicate and optional sort descriptors, returning a publisher that emits an array of `ICloudEntity` or an error.
 
 ```swift
-func createItem<T: ICloudEntity>(item: T) async throws -> CKRecord?
+func updateItemPublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord, Error>
+```
+**Overview:**
+Updates an existing CloudKit record with the provided `ICloudEntity` and returns a publisher that emits the updated record or an error.
+
+```swift
+func deletePublisher<T: ICloudEntity & Sendable>(item: T) -> AnyPublisher<CKRecord.ID, Error>
+```
+**Overview:**
+Deletes the specified CloudKit record and returns a publisher that emits the record ID of the deleted record or an error.
+
+#### Async/Await:
+---
+
+```swift
+func createItem<T: ICloudEntity>(item: T) async throws -> CKRecord
+```
+**Overview:**
+Creates a new CloudKit record from the given `ICloudEntity` and returns the saved record, or throws an error if the save fails.
+
+```swift
 func readItem<T: ICloudEntity>(recordID: CKRecord.ID) async throws -> T?
+```
+**Overview:**
+Fetches a CloudKit record by its CKRecord.ID and returns the corresponding `ICloudEntity` (nil if initialization fails), or throws an error.
+
+```swift
 func readItems<T: ICloudEntity & Sendable>(
     recordType: CKRecord.RecordType,
     predicateBuilder: @escaping () -> NSPredicate,
     sortDescriptors: [SortDescriptorWrapper]? = nil,
     resultsLimit: Int? = nil
-) async throws -> [T] // Получение массива объектов из CloudKit с фильтром и сортировкой
-func updateItem<T: ICloudEntity>(item: T) async throws -> CKRecord?
-func delete<T: ICloudEntity>(item: T) async throws -> CKRecord.ID?
+) async throws -> [T]
 ```
+**Overview:**
+Fetches multiple CloudKit records matching the specified predicate and optional sort descriptors, returning an array of `ICloudEntity` or throws an error if the query fails.
+
+```swift
+func updateItem<T: ICloudEntity>(item: T) async throws -> CKRecord
+```
+**Overview:**
+Updates an existing CloudKit record by saving the provided `ICloudEntity` (overwrites if it exists) and returns the updated record, or throws an error if the update fails.
+
+```swift
+func delete<T: ICloudEntity>(item: T) async throws -> CKRecord.ID
+```
+**Overview:**
+Deletes the specified CloudKit record and returns the record ID of the deleted record, or throws an error if the deletion fails.
 
 ---
 
